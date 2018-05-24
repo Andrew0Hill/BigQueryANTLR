@@ -8,7 +8,7 @@ sources_list = [
     "src/bigqueryLexer.cpp",
     "src/bigqueryListener.cpp",
     "src/bigqueryParser.cpp",
-    "src/SelecTable.cpp"
+    "src/SelectTable.cpp"
 ]
 antlrbq = Extension(
     name='antlrbq', 
