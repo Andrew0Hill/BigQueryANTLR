@@ -8,7 +8,7 @@ sources_list = [
     "src/bigqueryLexer.cpp",
     "src/bigqueryListener.cpp",
     "src/bigqueryParser.cpp",
-    "src/SelecTable.cpp"
+    "src/SelectTable.cpp"
 ]
 antlrbq = Extension(
     name='antlrbq', 
@@ -16,6 +16,7 @@ antlrbq = Extension(
     extra_compile_args = ["-std=c++11","-Wl, -rpath=/usr/local/lib/"],
     include_dirs=['/usr/local/include','/usr/local/include/antlr4-runtime/'],
     library_dirs=['/usr/local/lib'],
+    runtime_library_dirs=['/usr/local/lib'],
     libraries=["antlr4-runtime"])
 
 setup(name = "antlrbq", version = "1.0", ext_modules = [antlrbq])
