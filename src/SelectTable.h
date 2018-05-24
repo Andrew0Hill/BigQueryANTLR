@@ -11,7 +11,6 @@ class SelectTable : public Table{
         std::shared_ptr<SelectTable> child;
         // List of all columns in the SelectTable's SELECT list.
         std::vector<Column> column_list;
-
         // List of references to columns that come from different parts of the SELECT query, i.e. WHERE, GROUP BY, etc.
         // This needs to be a separate list because we need to cross-reference these column names with the aliases of columns in the SELECT list
         // after we've built the lookup table at that level.

@@ -3,6 +3,7 @@
 #include "bigqueryBaseListener.h"
 #include "SelectTable.h"
 #include "QueryPart.h"
+#include "SortedColumns.h"
 #include <memory>
 #include <stack>
 #define DEBUG
@@ -18,8 +19,21 @@ public:
 			std::cout << "Constructor called" << std::endl;
 		#endif
 		current_table = root_table;
+	}
 
-
+	void get_columns(std::vector<Column> &all_columns){
+		#ifdef DEBUG
+			std::cout << "Clearing columns" << std::endl;
+		#endif
+		all_columns.clear();
+		#ifdef DEBUG
+			std::cout << "Inserting column list" << std::endl;
+		#endif
+		all_columns.insert(all_columns.end(), final_table->column_list.begin(), final_table->column_list.end());
+		#ifdef DEBUG
+			std::cout << "Inserting column reference list" << std::endl;
+		#endif
+		all_columns.insert(all_columns.end(), final_table->column_ref_list.begin(), final_table->column_ref_list.end());
 	}
 	// Set the callback that is called for each column ID.
 	void setCallback(PyObject* callback_ptr){
@@ -45,8 +59,12 @@ public:
 		#endif
 	}
 	void exitParse(bigqueryParser::ParseContext *ctx) override {
+
 		#ifdef DEBUG
 			std::cout << "Enter: exitParse()" << std::endl;
+		#endif
+		final_table = current_table->child;
+		#ifdef DEBUG
 			std::cout << "Final Lookup Table" <<std::endl;
 			for (Column &c : current_table->child->column_list){
 				std::cout << c << std::endl;
@@ -394,7 +412,7 @@ public:
 			std::string table_name = ctx->table_name() == NULL ? "" : ctx->table_name()->getText();
 			std::string alias_name = ctx->column_name()->getText();
 
-			std::vector<QPart> query_context = part_of_query;
+			std::vector<std::string> query_context = part_of_query;
 
 			current_table->column_ref_list.push_back(Column(alias_name,column_name,table_name,query_context));
 		}
@@ -414,7 +432,7 @@ public:
 			std::string column_name = ctx->expr()->column_expr()->column_name()->getText();
 			std::string alias_name = ctx->alias_name() == NULL ? column_name : ctx->alias_name()->getText();
 			std::string table_name = ctx->expr()->column_expr()->table_name() == NULL ? "" : ctx->expr()->column_expr()->table_name()->getText();
-			std::vector<QPart> query_context = part_of_query;
+			std::vector<std::string> query_context = part_of_query;
 			current_table->column_list.push_back(Column(alias_name,column_name,table_name,query_context));
 		}
 		#ifdef DEBUG
@@ -429,9 +447,10 @@ public:
 	}*/
 private:
     antlr4::tree::ParseTreeProperty<TablePtr> table_tree;
-	std::vector<QPart> part_of_query; 
+	std::vector<std::string> part_of_query; 
     TablePtr current_table;
     TablePtr root_table;
+	TablePtr final_table;
     PyObject* callback; 
 };
 #endif

@@ -40,14 +40,58 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 		}
 		walker.walk(&listener, tree);
 	}
+	// Create a new PyDictionary object.
 	PyObject* return_dict = PyDict_New();
+	// Create a vector of return lists for each query context.
 	std::vector<PyObject*> return_list(4);
+	std::vector<Column> parsed_columns;
 
-	for(int i = 0; i < return_list.size(); ++i){
-		return_list[i] = PyList_New(0);
-		Py_IncRef(return_list[i]);
+	listener.get_columns(parsed_columns);
+	if(!parsed_columns.empty()){
+		SortedColumns sc(parsed_columns);
+		return_list[0] = PyList_New(0);
+		for(Column &c : sc.SELECT_columns){
+			PyObject* col_dict = PyDict_New();
+			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
+			PyDict_SetItemString(col_dict,"alias",PyUnicode_FromString(c.alias.c_str()));
+			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
+			PyList_Append(return_list[0], col_dict);
+		}
+		Py_IncRef(return_list[0]);
+
+		return_list[1] = PyList_New(0);
+		for(Column &c : sc.WHERE_columns){
+			PyObject* col_dict = PyDict_New();
+			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
+			PyDict_SetItemString(col_dict,"alias",PyUnicode_FromString(c.alias.c_str()));
+			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
+			PyList_Append(return_list[1], col_dict);
+		}
+		Py_IncRef(return_list[1]);
+
+		return_list[2] = PyList_New(0);
+		for(Column &c : sc.GROUP_BY_columns){
+			PyObject* col_dict = PyDict_New();
+			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
+			PyDict_SetItemString(col_dict,"alias",PyUnicode_FromString(c.alias.c_str()));
+			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
+			PyList_Append(return_list[2], col_dict);
+		}
+		Py_IncRef(return_list[2]);
+
+
+		return_list[3] = PyList_New(0);
+		for(Column &c : sc.WITH_columns){
+			PyObject* col_dict = PyDict_New();
+			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
+			PyDict_SetItemString(col_dict,"alias",PyUnicode_FromString(c.alias.c_str()));
+			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
+			PyList_Append(return_list[3], col_dict);
+		}
+		Py_IncRef(return_list[3]);
+
+
 	}
-
 	Py_IncRef(return_dict);
 
 	PyDict_SetItemString(return_dict, "SELECT", return_list[0]);
@@ -55,7 +99,6 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 	PyDict_SetItemString(return_dict, "GROUP_BY", return_list[2]);
 	PyDict_SetItemString(return_dict, "WITH", return_list[3]);
 
-	std::cout << "Test Debug String" << std::endl;
 	return return_dict;
 }
 
