@@ -69,6 +69,7 @@ public:
 		#ifdef DEBUG
 			std::cout << "Enter: exitParse()" << std::endl;
 		#endif
+		
 		final_table = current_table->child;
 		#ifdef DEBUG
 			std::cout << "Final Lookup Table" <<std::endl;
@@ -101,7 +102,7 @@ public:
 		TablePtr table = std::make_shared<SelectTable>(current_table);
 		table_tree.put(ctx, table);
 		// If we're in a subquery, we should add this table as a cte_child of the current table.
-		if(part_of_query.back() == "WITH"){
+		if(!part_of_query.empty() && part_of_query.back() == "WITH"){
 			#ifdef DEBUG
 				std::cout << "Inside a CTE statement" << std::endl;
 			#endif
