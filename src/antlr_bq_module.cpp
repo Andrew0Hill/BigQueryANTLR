@@ -47,9 +47,12 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 	std::vector<Column> parsed_columns;
 
 	listener.get_columns(parsed_columns);
+	for(int i = 0; i < 4; ++i){
+		return_list[i] = PyList_New(0);
+		Py_IncRef(return_list[i]);
+	}
 	if(!parsed_columns.empty()){
 		SortedColumns sc(parsed_columns);
-		return_list[0] = PyList_New(0);
 		for(Column &c : sc.SELECT_columns){
 			PyObject* col_dict = PyDict_New();
 			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
@@ -57,9 +60,7 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
 			PyList_Append(return_list[0], col_dict);
 		}
-		Py_IncRef(return_list[0]);
 
-		return_list[1] = PyList_New(0);
 		for(Column &c : sc.WHERE_columns){
 			PyObject* col_dict = PyDict_New();
 			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
@@ -67,9 +68,7 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
 			PyList_Append(return_list[1], col_dict);
 		}
-		Py_IncRef(return_list[1]);
 
-		return_list[2] = PyList_New(0);
 		for(Column &c : sc.GROUP_BY_columns){
 			PyObject* col_dict = PyDict_New();
 			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
@@ -77,10 +76,7 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
 			PyList_Append(return_list[2], col_dict);
 		}
-		Py_IncRef(return_list[2]);
 
-
-		return_list[3] = PyList_New(0);
 		for(Column &c : sc.WITH_columns){
 			PyObject* col_dict = PyDict_New();
 			PyDict_SetItemString(col_dict,"name",PyUnicode_FromString(c.real_name.c_str()));
@@ -88,8 +84,6 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 			PyDict_SetItemString(col_dict,"table",PyUnicode_FromString(c.table_name.c_str()));
 			PyList_Append(return_list[3], col_dict);
 		}
-		Py_IncRef(return_list[3]);
-
 
 	}
 	Py_IncRef(return_dict);

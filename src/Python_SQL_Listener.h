@@ -29,11 +29,17 @@ public:
 		#ifdef DEBUG
 			std::cout << "Inserting column list" << std::endl;
 		#endif
+		if(final_table == NULL){
+			return;
+		}
 		all_columns.insert(all_columns.end(), final_table->column_list.begin(), final_table->column_list.end());
 		#ifdef DEBUG
 			std::cout << "Inserting column reference list" << std::endl;
 		#endif
 		all_columns.insert(all_columns.end(), final_table->column_ref_list.begin(), final_table->column_ref_list.end());
+		#ifdef DEBUG
+			std::cout << "Done Inserting column reference list" << std::endl;
+		#endif
 	}
 	// Set the callback that is called for each column ID.
 	void setCallback(PyObject* callback_ptr){
@@ -66,12 +72,16 @@ public:
 		final_table = current_table->child;
 		#ifdef DEBUG
 			std::cout << "Final Lookup Table" <<std::endl;
-			for (Column &c : current_table->child->column_list){
-				std::cout << c << std::endl;
+			if(current_table->child != NULL){
+				for (Column &c : current_table->child->column_list){
+					std::cout << c << std::endl;
+				}
 			}
 			std::cout << "Final Column Reference Table" << std::endl;
-			for (Column &c : current_table->child->column_ref_list){
-				std::cout << c << std::endl;
+			if(current_table->child != NULL){
+				for (Column &c : current_table->child->column_ref_list){
+					std::cout << c << std::endl;
+				}
 			}
 			std::cout << "Exit: exitParse()" << std::endl;
 		#endif
@@ -90,7 +100,17 @@ public:
 		#endif
 		TablePtr table = std::make_shared<SelectTable>(current_table);
 		table_tree.put(ctx, table);
-		current_table->child = table;
+		// If we're in a subquery, we should add this table as a cte_child of the current table.
+		if(part_of_query.back() == "WITH"){
+			#ifdef DEBUG
+				std::cout << "Inside a CTE statement" << std::endl;
+			#endif
+			current_table->cte_children.push_back(table);
+		}
+		// Otherwise add it as the child of this table.
+		else{
+			current_table->child = table;
+		}
 		current_table = table;
 		// Push a SELECT statement onto the stack
 		part_of_query.push_back(QueryPart::SELECT);
@@ -404,13 +424,41 @@ public:
     */
 
    /*
+    * BEGIN WITH
+	*/
+	void enterWith_statement(bigqueryParser::With_statementContext *ctx) override {
+		#ifdef DEBUG
+			std::cout << "Enter: enterWith_statement()" << std::endl;
+		#endif
+	   part_of_query.push_back(QueryPart::WITH);
+	   	#ifdef DEBUG
+			std::cout << "Exit: enterWith_statement()" << std::endl;
+		#endif
+	}
+	void exitWith_statement(bigqueryParser::With_statementContext *ctx) override {
+		#ifdef DEBUG
+			std::cout << "Enter: exitWith_statement()" << std::endl;
+		#endif
+	   part_of_query.pop_back();
+	   	#ifdef DEBUG
+			std::cout << "Exit: exitWith_statement()" << std::endl;
+		#endif
+	}
+   /*
+    * END WITH
+	*/
+   /*
    	* BEGIN COLUMN EXPRESSION
 	*/
 	void enterColumn_expr(bigqueryParser::Column_exprContext *ctx) override{
-		if(!part_of_query.empty() && part_of_query.back() != "SELECT"){
-			std::string column_name = ctx->column_name()->getText();
-			std::string table_name = ctx->table_name() == NULL ? "" : ctx->table_name()->getText();
-			std::string alias_name = ctx->column_name()->getText();
+		if(!part_of_query.empty() && (part_of_query.back() != "SELECT" || part_of_query.front() == "WITH")){
+			bigqueryParser::Column_exprContext *temp = ctx;
+			while(temp->column_expr() != NULL){
+				temp = temp->column_expr();
+			}
+			std::string column_name = temp->column_name()->getText();
+			std::string table_name = temp->table_name() == NULL ? "" : temp->table_name()->getText();
+			std::string alias_name = temp->column_name()->getText();
 
 			std::vector<std::string> query_context = part_of_query;
 
@@ -429,10 +477,35 @@ public:
 			std::cout << "Enter: enterAlias_expr()" << std::endl;
 		#endif
 		if(ctx->expr()->column_expr() != NULL){
-			std::string column_name = ctx->expr()->column_expr()->column_name()->getText();
+			#ifdef DEBUG
+				std::cout << "Check if column_expr is NULL." << std::endl;
+			#endif
+			bigqueryParser::Column_exprContext *temp = ctx->expr()->column_expr();
+			#ifdef DEBUG
+				std::cout << "Iterate until column_name" << std::endl;
+			#endif
+			while(temp->column_expr() != NULL){
+				temp = temp->column_expr();
+			}
+			#ifdef DEBUG
+				std::cout << "Get column_name" << std::endl;
+			#endif
+			std::string column_name = temp->column_name()->getText();
+			#ifdef DEBUG
+				std::cout << "Get alias_name" << std::endl;
+			#endif
 			std::string alias_name = ctx->alias_name() == NULL ? column_name : ctx->alias_name()->getText();
-			std::string table_name = ctx->expr()->column_expr()->table_name() == NULL ? "" : ctx->expr()->column_expr()->table_name()->getText();
+			#ifdef DEBUG
+				std::cout << "Get table_name" << std::endl;
+			#endif
+			std::string table_name = temp->table_name() == NULL ? "" : temp->table_name()->getText();
+			#ifdef DEBUG
+				std::cout << "Get context" << std::endl;
+			#endif
 			std::vector<std::string> query_context = part_of_query;
+			#ifdef DEBUG
+				std::cout << "Add new column" << std::endl;
+			#endif
 			current_table->column_list.push_back(Column(alias_name,column_name,table_name,query_context));
 		}
 		#ifdef DEBUG

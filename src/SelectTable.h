@@ -9,6 +9,7 @@ class SelectTable : public Table{
     public:
         std::shared_ptr<SelectTable> parent;
         std::shared_ptr<SelectTable> child;
+        std::vector<std::shared_ptr<SelectTable>> cte_children;
         // List of all columns in the SelectTable's SELECT list.
         std::vector<Column> column_list;
         // List of references to columns that come from different parts of the SELECT query, i.e. WHERE, GROUP BY, etc.
