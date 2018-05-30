@@ -20,7 +20,15 @@ public:
 		#endif
 		current_table = root_table;
 	}
+	void reset(){
+		part_of_query.clear();
+		current_table = nullptr;
+		root_table = nullptr;
+		current_table = nullptr;
 
+		root_table = std::make_shared<SelectTable>(nullptr);
+		table_tree = antlr4::tree::ParseTreeProperty<TablePtr>();
+	}
 	void get_columns(std::vector<Column> &all_columns){
 		#ifdef DEBUG
 			std::cout << "Clearing columns" << std::endl;
@@ -69,20 +77,24 @@ public:
 		#ifdef DEBUG
 			std::cout << "Enter: exitParse()" << std::endl;
 		#endif
-		
-		final_table = current_table->child;
+		if(current_table != nullptr && !current_table->children.empty())
+			final_table = current_table->children[0];
 		#ifdef DEBUG
 			std::cout << "Final Lookup Table" <<std::endl;
-			if(current_table->child != NULL){
-				for (Column &c : current_table->child->column_list){
+			if(current_table != nullptr && !current_table->children.empty()){
+				for (Column &c : current_table->children[0]->column_list){
 					std::cout << c << std::endl;
 				}
+			}else{
+				std::cout << "Table is NULL!" << std::endl;
 			}
 			std::cout << "Final Column Reference Table" << std::endl;
-			if(current_table->child != NULL){
-				for (Column &c : current_table->child->column_ref_list){
+			if(current_table != nullptr && !current_table->children.empty()){
+				for (Column &c : current_table->children[0]->column_ref_list){
 					std::cout << c << std::endl;
 				}
+			}else{
+				std::cout << "Table is NULL!" << std::endl;
 			}
 			std::cout << "Exit: exitParse()" << std::endl;
 		#endif
@@ -110,7 +122,7 @@ public:
 		}
 		// Otherwise add it as the child of this table.
 		else{
-			current_table->child = table;
+			current_table->children.push_back(table);
 		}
 		current_table = table;
 		// Push a SELECT statement onto the stack
@@ -240,12 +252,13 @@ public:
 		}
 		// Iterate each column in the column list. Add the values to the lookup table at this level.
 		for(Column &c : current_table->column_list){
-			if(current_table->column_lookup.find(c.alias) == current_table->column_lookup.end()){
+			/*if(current_table->column_lookup.find(c.alias) == current_table->column_lookup.end()){
 				std::vector<Column> list = {c};
 				current_table->column_lookup[c.alias] = list;
 			}else{
 				current_table->column_lookup[c.alias].push_back(c);
-			}
+			}*/
+			INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 		}
 
 		// Iterate each column in the column reference list, and resolve them to real column names if possible.
@@ -389,11 +402,50 @@ public:
 	* BEGIN QUERY EXPRESSION
 	*/
 	void enterQuery_expr(bigqueryParser::Query_exprContext *ctx) override {
+		// A Query Expression can contain one or more Select Statements within it. 
+		// We create a new SelectTable for each Query Expression we enter.
+		// When we exit the Query Expression, we merge all of the Select Statements within that
+		// Query Expression into a single SelectTable.
+
+		// Create a new table with the current table as its parent
+		TablePtr query_table = std::make_shared<SelectTable>(current_table);
+
+		// Add this table to the children of the current table.
+		current_table->children.push_back(query_table);
+
+		// Set the current table to this table.
+		current_table = query_table;
 
 	}
 
 	void exitQuery_expr(bigqueryParser::Query_exprContext *ctx) override {
+		for(bigqueryParser::Select_statementContext* &sctx : ctx->select_statement()){
+			TablePtr t = table_tree.get(sctx);
+			// We can simply concatenate the column lists together.
+			LIST_INSERT_ALL(current_table->column_list, t->column_list)
+			LIST_INSERT_ALL(current_table->column_ref_list, t->column_ref_list)
+			//current_table->column_list.insert(current_table->column_list.end(), t->column_list.begin(), t->column_list.end())
+			// For the column lookup we need to do a little more because there might be columns from two separate select statements
+			// that have the same aliased name. 
+			for(Column &c : t->column_list){
+				// If this column's real name doesn't already have an entry in the table associated with it,
+				// create the vector and set up the entry.
+				/*if(current_table->column_lookup.find(c.real_name) == current_table->column_lookup.end()){
+					current_table->column_lookup[c.real_name] = std::vector<Column>();
+				}
+				// Add the column to the vector for this entry.
+				current_table->column_lookup[c.real_name].push_back(c);*/
+				INSERT_OR_MAKE_VEC(current_table->column_lookup, c.real_name, Column, c)
+			}
 
+
+			// The other two lookup tables only deal with table pointers, so they can be concatenated.
+			//current_table->sq_lookup_table.insert(current_table->sq_lookup_table.end(), t->lookup_table.begin(), t->lookup_table.end());
+			MAP_INSERT_ALL(current_table->sq_lookup_table, t->sq_lookup_table)
+			//current_table->lookup_table.insert(current_table->lookup_table.begin(), current_table->lookup_table.end());
+			MAP_INSERT_ALL(current_table->lookup_table, t->lookup_table)
+		}
+		current_table = current_table->parent;
 	}
    /*
 	* END QUERY EXPRESSION
@@ -452,6 +504,9 @@ public:
    	* BEGIN COLUMN EXPRESSION
 	*/
 	void enterColumn_expr(bigqueryParser::Column_exprContext *ctx) override{
+		#ifdef DEBUG
+			std::cout << "Enter: enterColumn_expr()" << std::endl;
+		#endif
 		if(!part_of_query.empty() && (part_of_query.back() != "SELECT" || part_of_query.front() == "WITH")){
 			bigqueryParser::Column_exprContext *temp = ctx;
 			while(temp->column_expr() != NULL){
@@ -465,6 +520,9 @@ public:
 
 			current_table->column_ref_list.push_back(Column(alias_name,column_name,table_name,query_context));
 		}
+		#ifdef DEBUG
+			std::cout << "Exit: enterColumn_expr()" << std::endl;
+		#endif
 	}
 	void exitColumn_expr(bigqueryParser::Column_exprContext *ctx) override{
 

@@ -22,7 +22,7 @@ static Python_SQL_Listener listener;
 
 // Function to parse a string passed as an argument.
 static PyObject* parse(PyObject* self, PyObject* args) {
-
+	listener.reset();
 	char* temp_string;
 
 	// Get the string passed in as an argument. 

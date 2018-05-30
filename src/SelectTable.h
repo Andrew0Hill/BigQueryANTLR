@@ -5,10 +5,24 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+// Insert all elements of one list into another list
+#define LIST_INSERT_ALL(target, source) target.insert(target.end(), source.begin(), source.end());
+// Insert all elements of a map into another map
+#define MAP_INSERT_ALL(target, source) target.insert(source.begin(), source.end());
+// Check if a key value (kval) exists in a map. If not, create a std::vector<ttype> and add tval as an element. 
+#define INSERT_OR_MAKE_VEC(target, kval, ttype, tval)    \
+               if(target.find(kval) != target.end()) {   \
+                    target[kval] = std::vector<ttype>(); \
+               }                                         \
+               target[kval].push_back(tval);
 class SelectTable : public Table{
     public:
         std::shared_ptr<SelectTable> parent;
-        std::shared_ptr<SelectTable> child;
+
+        // Vector of all children of this SelectTable.
+        std::vector<std::shared_ptr<SelectTable>> children;
+
+        // TODO: get rid of this?
         std::vector<std::shared_ptr<SelectTable>> cte_children;
         // List of all columns in the SelectTable's SELECT list.
         std::vector<Column> column_list;
