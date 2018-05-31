@@ -28,6 +28,7 @@ public:
 
 		root_table = std::make_shared<SelectTable>(nullptr);
 		table_tree = antlr4::tree::ParseTreeProperty<TablePtr>();
+		cexpr_seen = antlr4::tree::ParseTreeProperty<bool>();
 	}
 	void get_columns(std::vector<Column> &all_columns){
 		#ifdef DEBUG
@@ -399,6 +400,20 @@ public:
 	*/
 
    /*
+    * BEGIN ON CLAUSE
+	*/
+	void enterOn_clause(bigqueryParser::On_clauseContext *ctx) override {
+		part_of_query.push_back(QueryPart::JOIN);
+	}
+
+	void exitOn_clause(bigqueryParser::On_clauseContext *ctx) override {
+		part_of_query.pop_back();
+	}
+   /*
+    * END ON CLAUSE
+	*/
+
+   /*
 	* BEGIN QUERY EXPRESSION
 	*/
 	void enterQuery_expr(bigqueryParser::Query_exprContext *ctx) override {
@@ -419,33 +434,57 @@ public:
 	}
 
 	void exitQuery_expr(bigqueryParser::Query_exprContext *ctx) override {
-		for(bigqueryParser::Select_statementContext* &sctx : ctx->select_statement()){
-			TablePtr t = table_tree.get(sctx);
-			// We can simply concatenate the column lists together.
-			LIST_INSERT_ALL(current_table->column_list, t->column_list)
-			LIST_INSERT_ALL(current_table->column_ref_list, t->column_ref_list)
-			//current_table->column_list.insert(current_table->column_list.end(), t->column_list.begin(), t->column_list.end())
-			// For the column lookup we need to do a little more because there might be columns from two separate select statements
-			// that have the same aliased name. 
+		// If this is a query expression (i.e. a SELECT inside some parentheses)
+		// We can just copy the child query_expr's table up into this one. 
+		#ifdef DEBUG
+			std::cout << "Enter: exitQuery_expr()" << std::endl;
+		#endif
+		if(ctx->query_expr() != NULL && table_tree.get(ctx->query_expr()) != NULL){
+			#ifdef DEBUG
+				std::cout << "Copying table up" << std::endl;
+			#endif
+			TablePtr t = table_tree.get(ctx->query_expr());
+			LIST_INSERT_ALL(current_table->column_list, t->column_list);
+			LIST_INSERT_ALL(current_table->column_ref_list, t->column_ref_list);
 			for(Column &c : t->column_list){
-				// If this column's real name doesn't already have an entry in the table associated with it,
-				// create the vector and set up the entry.
-				/*if(current_table->column_lookup.find(c.real_name) == current_table->column_lookup.end()){
-					current_table->column_lookup[c.real_name] = std::vector<Column>();
-				}
-				// Add the column to the vector for this entry.
-				current_table->column_lookup[c.real_name].push_back(c);*/
 				INSERT_OR_MAKE_VEC(current_table->column_lookup, c.real_name, Column, c)
 			}
-
-
-			// The other two lookup tables only deal with table pointers, so they can be concatenated.
-			//current_table->sq_lookup_table.insert(current_table->sq_lookup_table.end(), t->lookup_table.begin(), t->lookup_table.end());
 			MAP_INSERT_ALL(current_table->sq_lookup_table, t->sq_lookup_table)
-			//current_table->lookup_table.insert(current_table->lookup_table.begin(), current_table->lookup_table.end());
 			MAP_INSERT_ALL(current_table->lookup_table, t->lookup_table)
 		}
+		else{
+			for(bigqueryParser::Select_statementContext* &sctx : ctx->select_statement()){
+				TablePtr t = table_tree.get(sctx);
+				// We can simply concatenate the column lists together.
+				LIST_INSERT_ALL(current_table->column_list, t->column_list)
+				LIST_INSERT_ALL(current_table->column_ref_list, t->column_ref_list)
+				//current_table->column_list.insert(current_table->column_list.end(), t->column_list.begin(), t->column_list.end())
+				// For the column lookup we need to do a little more because there might be columns from two separate select statements
+				// that have the same aliased name. 
+				for(Column &c : t->column_list){
+					// If this column's real name doesn't already have an entry in the table associated with it,
+					// create the vector and set up the entry.
+					/*if(current_table->column_lookup.find(c.real_name) == current_table->column_lookup.end()){
+						current_table->column_lookup[c.real_name] = std::vector<Column>();
+					}
+					// Add the column to the vector for this entry.
+					current_table->column_lookup[c.real_name].push_back(c);*/
+					INSERT_OR_MAKE_VEC(current_table->column_lookup, c.real_name, Column, c)
+				}
+
+
+				// The other two lookup tables only deal with table pointers, so they can be concatenated.
+				//current_table->sq_lookup_table.insert(current_table->sq_lookup_table.end(), t->lookup_table.begin(), t->lookup_table.end());
+				MAP_INSERT_ALL(current_table->sq_lookup_table, t->sq_lookup_table)
+				//current_table->lookup_table.insert(current_table->lookup_table.begin(), current_table->lookup_table.end());
+				MAP_INSERT_ALL(current_table->lookup_table, t->lookup_table)
+			}
+		}
+		table_tree.put(ctx, current_table);
 		current_table = current_table->parent;
+		#ifdef DEBUG
+			std::cout << "Exit: exitQuery_expr()" << std::endl;
+		#endif
 	}
    /*
 	* END QUERY EXPRESSION
@@ -507,10 +546,20 @@ public:
 		#ifdef DEBUG
 			std::cout << "Enter: enterColumn_expr()" << std::endl;
 		#endif
+		if(cexpr_seen.get(ctx))
+			return;
 		if(!part_of_query.empty() && (part_of_query.back() != "SELECT" || part_of_query.front() == "WITH")){
 			bigqueryParser::Column_exprContext *temp = ctx;
+			cexpr_seen.put(ctx,true);
 			while(temp->column_expr() != NULL){
+				cexpr_seen.put(temp->column_expr(),true);
 				temp = temp->column_expr();
+			}
+			if(temp->column_name() == NULL){
+				#ifdef DEBUG
+					std::cout << "Error: column name is NULL. This probably means an error occurred during parsing." << std::endl;
+				#endif
+				return;
 			}
 			std::string column_name = temp->column_name()->getText();
 			std::string table_name = temp->table_name() == NULL ? "" : temp->table_name()->getText();
@@ -535,7 +584,7 @@ public:
 		#ifdef DEBUG
 			std::cout << "Enter: enterAlias_expr()" << std::endl;
 		#endif
-		if(ctx->expr()->column_expr() != NULL){
+		if(ctx->expr() != NULL && ctx->expr()->column_expr() != NULL){
 			#ifdef DEBUG
 				std::cout << "Check if column_expr is NULL." << std::endl;
 			#endif
@@ -579,6 +628,7 @@ public:
 	}*/
 private:
     antlr4::tree::ParseTreeProperty<TablePtr> table_tree;
+	antlr4::tree::ParseTreeProperty<bool> cexpr_seen;
 	std::vector<std::string> part_of_query; 
     TablePtr current_table;
     TablePtr root_table;

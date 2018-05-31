@@ -15,6 +15,8 @@ class SortedColumns{
                     WITH_columns.push_back(c);
                 }else if(c.context.back() == QueryPart::WHERE){
                     WHERE_columns.push_back(c);
+                }else if(c.context.back() == QueryPart::JOIN){
+                    JOIN_columns.push_back(c);
                 }
             }
         }
@@ -22,5 +24,6 @@ class SortedColumns{
         std::vector<Column> SELECT_columns;
         std::vector<Column> GROUP_BY_columns;
         std::vector<Column> WHERE_columns;
+        std::vector<Column> JOIN_columns;
 };
 #endif
