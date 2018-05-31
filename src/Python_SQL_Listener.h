@@ -25,7 +25,7 @@ public:
 		current_table = nullptr;
 		root_table = nullptr;
 		current_table = nullptr;
-
+		global_cte_table = nullptr;
 		root_table = std::make_shared<SelectTable>(nullptr);
 		table_tree = antlr4::tree::ParseTreeProperty<TablePtr>();
 		cexpr_seen = antlr4::tree::ParseTreeProperty<bool>();
@@ -78,8 +78,42 @@ public:
 		#ifdef DEBUG
 			std::cout << "Enter: exitParse()" << std::endl;
 		#endif
-		if(current_table != nullptr && !current_table->children.empty())
+		if(current_table != nullptr && !current_table->children.empty()) {
+			std::cout << "There are: " << current_table->cte_children.size() << " CTEs and: " << current_table->children.size() << std::endl;
+
+			/*for(auto &table : current_table->children){
+				for(auto &col : table->column_list){
+					if()
+				}
+			}*/
+
 			final_table = current_table->children[0];
+		}
+		// If there is a query_statement
+		/*if(ctx->query_statement() && ctx->query_statement()->query_expr() && table_tree.get(ctx->query_statement()->query_expr()) != NULL){
+			TablePtr query_table = table_tree.get(ctx->query_statement()->query_expr());
+			TablePtr temp_cte_table = std::make_shared<SelectTable>(nullptr);
+			// If there are CTE expressions for us to work with.
+			if(ctx->query_statement()->with_statement()){
+				// For each CTE in the query_statement.
+				for(auto &cte_expr : ctx->query_statement()->with_statement()->cte_expr()){
+					// Check if the query_expr exists and if there is a table associated with it.
+					if(cte_expr->query_expr() != NULL && cte_expr->cte_name() != NULL && table_tree.get(cte_expr->query_expr()) != NULL ){
+						std::string cte_name = cte_expr->cte_name()->getText();
+						// If so, get the reference.
+						TablePtr cte_temp = table_tree.get(cte_expr->query_expr());
+						for(Column &c : cte_temp->column_list){
+							Column new_col = c;
+							new_col.table_alias_name = cte_name;
+							temp_cte_table->column_list.push_bacl
+						}
+					}
+				}
+			}
+		}*/
+
+
+
 		#ifdef DEBUG
 			std::cout << "Final Lookup Table" <<std::endl;
 			if(current_table != nullptr && !current_table->children.empty()){
@@ -115,16 +149,16 @@ public:
 		TablePtr table = std::make_shared<SelectTable>(current_table);
 		table_tree.put(ctx, table);
 		// If we're in a subquery, we should add this table as a cte_child of the current table.
-		if(!part_of_query.empty() && part_of_query.back() == "WITH"){
+		/*if(!part_of_query.empty() && part_of_query.back() == "WITH"){
 			#ifdef DEBUG
 				std::cout << "Inside a CTE statement" << std::endl;
 			#endif
 			current_table->cte_children.push_back(table);
 		}
 		// Otherwise add it as the child of this table.
-		else{
+		else{*/
 			current_table->children.push_back(table);
-		}
+		//}
 		current_table = table;
 		// Push a SELECT statement onto the stack
 		part_of_query.push_back(QueryPart::SELECT);
@@ -150,17 +184,60 @@ public:
 			std::cout << "Checking lookup table size." << std::endl;
 		#endif
 		if(current_table->lookup_table.size() == 1 && current_table->sq_lookup_table.size() == 0){
-			// Get a reference to the first (only) table in the lookup table list.
 			#ifdef DEBUG
 				std::cout << "Get Table reference." << std::endl;
 			#endif
 			auto table = current_table->lookup_table.begin()->second;
-			for(Column &c : current_table->column_list){
-				#ifdef DEBUG
-					std::cout << "Updating tables name to: '" << table->table_name << "' from: '"   << c.table_name << "'." << std::endl;
-				#endif
-				c.table_name = table->table_name;
-			}
+
+			if(global_cte_table != nullptr && global_cte_table->sq_lookup_table.find(table->table_name) != current_table->sq_lookup_table.end()){
+					std::cout << "Found a CTE with matching table name." << std::endl;
+					// Get a reference to the matching table.
+					auto t_ptr = global_cte_table->sq_lookup_table[table->table_name];
+
+					#ifdef DEBUG
+						for(auto &it : t_ptr->column_lookup){
+							std::cout << it.first << std::endl;
+							for(auto &col : it.second){
+								std::cout << col << std::endl;
+							}
+						}
+					#endif
+
+					for(Column &c : current_table->column_list){
+						// Resolve the column name.
+						std::vector<Column> columns = t_ptr->column_lookup[c.real_name];
+						// Column object to hold the matched column if it exists. 
+						Column found_col;
+						// Boolean value so we can check if a match was found or not.
+						bool match_found = false;
+						// Iterate through all columns that have this real_name.
+						for(Column &t_col : columns){
+							std::cout << t_col.alias << std::endl;
+							if(t_col.alias == c.real_name){
+								found_col = t_col;
+								match_found = true;
+								break;
+							}
+						}
+						// If a match was found, update the table name and real name for the column.
+						if(match_found){
+							c.real_name = found_col.real_name;
+							c.table_name = found_col.table_name;
+						}else{
+							std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
+						}
+					}
+				}
+				else{
+					// Get a reference to the first (only) table in the lookup table list.
+
+					for(Column &c : current_table->column_list){
+						#ifdef DEBUG
+							std::cout << "Updating tables name to: '" << table->table_name << "' from: '"   << c.table_name << "'." << std::endl;
+						#endif
+						c.table_name = table->table_name;
+					}
+				}
 		}
 		// If there is a single subquery table in the FROM list, do the same as above but also update the column and table names from the subquery.
 		else if (current_table->sq_lookup_table.size() == 1 && current_table->lookup_table.size() == 0){
@@ -213,8 +290,46 @@ public:
 		// In this case we must rely on the table name from each <table_name>.<column_name> expression in order to resolve table names.
 		else{
 			for(Column &c : current_table->column_list){
+				// Check the global CTE table for this table name.
+				if(global_cte_table != nullptr && global_cte_table->sq_lookup_table.find(c.table_name) != current_table->sq_lookup_table.end()){
+					std::cout << "Found a CTE with matching table name." << std::endl;
+					// Get a reference to the matching table.
+					auto t_ptr = global_cte_table->sq_lookup_table[c.table_name];
+
+					#ifdef DEBUG
+						for(auto &it : t_ptr->column_lookup){
+							std::cout << it.first << std::endl;
+							for(auto &col : it.second){
+								std::cout << col << std::endl;
+							}
+						}
+					#endif
+
+					// Resolve the column name.
+					std::vector<Column> columns = t_ptr->column_lookup[c.real_name];
+					// Column object to hold the matched column if it exists. 
+					Column found_col;
+					// Boolean value so we can check if a match was found or not.
+					bool match_found = false;
+					// Iterate through all columns that have this real_name.
+					for(Column &t_col : columns){
+						std::cout << t_col.alias << std::endl;
+						if(t_col.alias == c.real_name){
+							found_col = t_col;
+							match_found = true;
+							break;
+						}
+					}
+					// If a match was found, update the table name and real name for the column.
+					if(match_found){
+						c.real_name = found_col.real_name;
+						c.table_name = found_col.table_name;
+					}else{
+						std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
+					}
+				}
 				// Check if this column comes from a normal table.
-				if(current_table->lookup_table.find(c.table_name) != current_table->lookup_table.end()){
+				else if(current_table->lookup_table.find(c.table_name) != current_table->lookup_table.end()){
 					// Get a reference to the Table that matches with the table name of this column.
 					auto table = current_table->lookup_table[c.table_name];
 					// For a non-subquery table all we need to do is update the column's table name to be that of the table it matched with.
@@ -231,7 +346,7 @@ public:
 					bool match_found = false;
 					// Iterate through all columns that have this real_name.
 					for(Column &t_col : columns){
-						if(t_col.real_name == c.real_name){
+						if(t_col.alias == c.real_name){
 							found_col = t_col;
 							match_found = true;
 							break;
@@ -413,6 +528,9 @@ public:
     * END ON CLAUSE
 	*/
 
+
+
+
    /*
 	* BEGIN QUERY EXPRESSION
 	*/
@@ -425,8 +543,19 @@ public:
 		// Create a new table with the current table as its parent
 		TablePtr query_table = std::make_shared<SelectTable>(current_table);
 
-		// Add this table to the children of the current table.
-		current_table->children.push_back(query_table);
+
+		// If we're in a subquery, we should add this table as a cte_child of the current table.
+		/*if(!part_of_query.empty() && part_of_query.back() == "WITH"){
+			#ifdef DEBUG
+				std::cout << "QueryStatement: Inside a CTE statement" << std::endl;
+			#endif
+			current_table->cte_children.push_back(query_table);
+		}
+		// Otherwise add it as the child of this table.
+		else{*/
+			current_table->children.push_back(query_table);
+		//}
+
 
 		// Set the current table to this table.
 		current_table = query_table;
@@ -469,7 +598,8 @@ public:
 					}
 					// Add the column to the vector for this entry.
 					current_table->column_lookup[c.real_name].push_back(c);*/
-					INSERT_OR_MAKE_VEC(current_table->column_lookup, c.real_name, Column, c)
+					// CHANGED TO ALIAS
+					INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 				}
 
 
@@ -522,16 +652,55 @@ public:
 		#ifdef DEBUG
 			std::cout << "Enter: enterWith_statement()" << std::endl;
 		#endif
-	   part_of_query.push_back(QueryPart::WITH);
+		// Make a table to hold all of the CTEs 
+		TablePtr t = std::make_shared<SelectTable>(current_table);
+
+		current_table->cte_children.push_back(t);
+		current_table = t;
+
+	   	part_of_query.push_back(QueryPart::WITH);
 	   	#ifdef DEBUG
 			std::cout << "Exit: enterWith_statement()" << std::endl;
 		#endif
 	}
 	void exitWith_statement(bigqueryParser::With_statementContext *ctx) override {
+
 		#ifdef DEBUG
 			std::cout << "Enter: exitWith_statement()" << std::endl;
+			std::cout << "There are: " << current_table->cte_children.size() << " CTE tables." << std::endl;
 		#endif
-	   part_of_query.pop_back();
+		/*// Merge all of the CTE tables into a single table, and then set the global CTE lookup table to this table.
+		int index = 0;
+		for(TablePtr &t : current_table->cte_children){
+			for(Column &c : t->column_list){
+				c.table_alias_name = current_table->cte_names[index];
+			}
+			LIST_INSERT_ALL(current_table->column_list, t->column_list);
+			LIST_INSERT_ALL(current_table->column_ref_list, t->column_ref_list);
+			for(Column &c : t->column_list){
+				INSERT_OR_MAKE_VEC(current_table->column_lookup, c.real_name, Column, c)
+			}
+			MAP_INSERT_ALL(current_table->sq_lookup_table, t->sq_lookup_table)
+			MAP_INSERT_ALL(current_table->lookup_table, t->lookup_table)
+			++index;
+		}
+		#ifdef DEBUG
+			for(Column &c : current_table->column_list){
+				std::cout << c << std::endl;
+			}
+		#endif
+
+		global_cte_table = current_table;
+		*/
+		int index = 0; 
+		// Iterate through the CTEs here and create a reference in this lookup table for each CTE.
+		for(TablePtr &t : current_table->cte_children){
+			current_table->sq_lookup_table[current_table->cte_names[index]] = t;
+			++index;
+		}
+		global_cte_table = current_table;
+		current_table = current_table->parent;
+	   	part_of_query.pop_back();
 	   	#ifdef DEBUG
 			std::cout << "Exit: exitWith_statement()" << std::endl;
 		#endif
@@ -539,6 +708,40 @@ public:
    /*
     * END WITH
 	*/
+
+   /*
+    * BEGIN CTE EXPR
+	*/
+	void enterCte_expr(bigqueryParser::Cte_exprContext* ctx) override {
+		TablePtr t = std::make_shared<SelectTable>(current_table);
+
+		current_table->cte_children.push_back(t);
+		if(ctx->cte_name()){
+			current_table->cte_names.push_back(ctx->cte_name()->getText());
+		}
+		current_table = t;
+	}
+
+	void exitCte_expr(bigqueryParser::Cte_exprContext* ctx) override {
+		// Copy the QueryExpr table up into this table.
+		TablePtr t = table_tree.get(ctx->query_expr());
+		if(t){
+			LIST_INSERT_ALL(current_table->column_list, t->column_list);
+			LIST_INSERT_ALL(current_table->column_ref_list, t->column_ref_list);
+			for(Column &c : t->column_list){
+				// Changed to alias	
+				INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
+			}
+			MAP_INSERT_ALL(current_table->sq_lookup_table, t->sq_lookup_table)
+			MAP_INSERT_ALL(current_table->lookup_table, t->lookup_table)
+		}
+		current_table = current_table->parent;
+	}
+   /*
+    * END CTE EXPR
+	*/
+
+
    /*
    	* BEGIN COLUMN EXPRESSION
 	*/
@@ -548,7 +751,7 @@ public:
 		#endif
 		if(cexpr_seen.get(ctx))
 			return;
-		if(!part_of_query.empty() && (part_of_query.back() != "SELECT" || part_of_query.front() == "WITH")){
+		if(!part_of_query.empty() && part_of_query.back() != "SELECT"){
 			bigqueryParser::Column_exprContext *temp = ctx;
 			cexpr_seen.put(ctx,true);
 			while(temp->column_expr() != NULL){
@@ -633,6 +836,7 @@ private:
     TablePtr current_table;
     TablePtr root_table;
 	TablePtr final_table;
+	TablePtr global_cte_table;
     PyObject* callback; 
 };
 #endif

@@ -24,6 +24,8 @@ class SelectTable : public Table{
 
         // TODO: get rid of this?
         std::vector<std::shared_ptr<SelectTable>> cte_children;
+        // List of names for each CTE
+        std::vector<std::string> cte_names;
         // List of all columns in the SelectTable's SELECT list.
         std::vector<Column> column_list;
         // List of references to columns that come from different parts of the SELECT query, i.e. WHERE, GROUP BY, etc.
@@ -35,8 +37,10 @@ class SelectTable : public Table{
         // Lookup table for normal tables (i.e. not a subquery, just a table w/ or w/out an alias)
         std::unordered_map<std::string, std::shared_ptr<Table>> lookup_table;
         // Lookup table for all columns in the SelectTable. 
-        // This is a mapping of Alias (std::string) -> Columns with this alias (std::vector<Column>)
+        // This is a mapping of real name (std::string) -> Columns with this name (std::vector<Column>)
         std::unordered_map<std::string, std::vector<Column>> column_lookup;
+        // This is a mapping of alias (std::string) -> Columns with this alias (std::vector<Column>)
+        //std::unordered_map<std::string, std::vector<Column>> alias_lookup;
         // Unique table ID for this table.
         int tid;
 
@@ -56,9 +60,14 @@ class SelectTable : public Table{
             merged_table->column_lookup.insert(t1->column_lookup.begin(), t1->column_lookup.end());
             merged_table->column_lookup.insert(t2->column_lookup.begin(), t2->column_lookup.end());
 
+            //merged_table->alias_lookup.insert(t1->alias_lookup.begin(), t1->alias_lookup.end());
+            //merged_table->alias_lookup.insert(t2->alias_lookup.begin(), t2->alias_lookup.end());
+
             merged_table->lookup_table.insert(t1->lookup_table.begin(), t1->lookup_table.end());
             merged_table->lookup_table.insert(t2->lookup_table.begin(), t2->lookup_table.end());
 
+            merged_table->sq_lookup_table.insert(t1->sq_lookup_table.begin(), t1->sq_lookup_table.end());
+            merged_table->sq_lookup_table.insert(t2->sq_lookup_table.begin(), t2->sq_lookup_table.end());
             return merged_table;
         }
         static int id;

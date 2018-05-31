@@ -11,12 +11,14 @@ class Column{
     std::string table_name;
     std::string table_alias_name;
     std::vector<QPart> context;
-    Column(std::string al, std::string rn, std::string tn, std::vector<QPart> ctxt){
+    bool in_cte;
+    Column(std::string al, std::string rn, std::string tn, std::vector<QPart> ctxt, bool cte = false){
         alias = al;
         real_name = rn;
         table_name = tn;
         table_alias_name = tn;
         context = ctxt;
+        in_cte = cte;
     }
     Column(){};
 
@@ -24,7 +26,7 @@ class Column{
 };
 
 inline std::ostream& operator<<(std::ostream& output, const Column& c){
-        output << "Column Alias: " << c.alias << " Column Real Name: " << c.real_name << " Table Name: " << c.table_name << " Table Context: " << std::endl;
+        output << "Column Alias: " << c.alias << " Column Real Name: " << c.real_name << " Table Name: " << c.table_name  << " Table Alias Name: " << c.table_alias_name << " Table Context: " << std::endl;
         for(auto it = c.context.rbegin(); it != c.context.rend(); ++it){
             output << *it << std::endl;
         } 
