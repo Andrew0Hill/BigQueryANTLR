@@ -6,7 +6,8 @@
 #include "SortedColumns.h"
 #include <memory>
 #include <stack>
-#define DEBUG
+// Uncomment this line to get debug print statements when running in Python.
+//#define DEBUG
 typedef std::shared_ptr<SelectTable> TablePtr;
 typedef std::shared_ptr<Table> BaseTablePtr;
 
@@ -479,43 +480,6 @@ public:
 		for(Column &c : current_table->column_list){
 			INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 		}
-
-		// Iterate each column in the column reference list, and resolve them to real column names if possible.
-		/*for(Column &c : current_table->column_ref_list){
-			// Check if we have an entry for this column in the column_lookup table.
-			if(current_table->column_lookup.find(c.real_name) != current_table->column_lookup.end()){
-				#ifdef DEBUG
-					for(auto &clm : current_table->column_lookup[c.real_name]){
-						std::cout << clm << std::endl;
-					}
-				#endif
-				if(current_table->column_lookup[c.real_name].size() == 1){
-					Column temp = current_table->column_lookup[c.real_name][0];
-
-					#ifdef DEBUG
-						std::cout << "Only one table matches lookup for: " << c.real_name << std::endl;
-					#endif
-					c.real_name = temp.real_name;
-					c.table_name = temp.table_name;
-				}
-				else{
-					// If so, iterate through the entries that match this alias and try to find one where the aliased table name
-					// matches the name 
-					for(Column &cand_col : current_table->column_lookup[c.real_name]){
-						#ifdef DEBUG
-							std::cout << "Current table alias name: " << cand_col.table_alias_name << " table name: " << c.table_name << std::endl;
-						#endif
-						if(cand_col.table_alias_name == c.table_name){
-							c.real_name = cand_col.real_name;
-							c.table_name = cand_col.table_name;
-						}
-					}
-				}
-			}
-		}*/
-
-
-
 
 		#ifdef DEBUG
 			std::cout << "Exit: exitSelect_statement()" << std::endl;
