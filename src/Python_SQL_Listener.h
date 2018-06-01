@@ -86,6 +86,10 @@ public:
 			// Set the final table to the first of the current_table's children. This is fine because the current table at this point will be from
 			// the top-level query_expr, which will have already merged all of the SELECT statements beneath it.
 			final_table = current_table->children[0];
+			if(global_cte_table != nullptr){
+				LIST_INSERT_ALL(final_table->column_ref_list, global_cte_table->column_list)
+				LIST_INSERT_ALL(final_table->column_ref_list, global_cte_table->column_ref_list)
+			}
 		}
 
 		#ifdef DEBUG
@@ -615,6 +619,8 @@ public:
 		int index = 0; 
 		// Iterate through the CTEs here and create a reference in this lookup table for each CTE.
 		for(TablePtr &t : current_table->cte_children){
+			LIST_INSERT_ALL(current_table->column_list, t->column_list)
+			LIST_INSERT_ALL(current_table->column_list, t->column_ref_list)
 			current_table->sq_lookup_table[current_table->cte_names[index]] = t;
 			++index;
 		}
