@@ -6,7 +6,7 @@
 #include "SortedColumns.h"
 #include <memory>
 #include <stack>
-#define DEBUG
+//#define DEBUG
 typedef std::shared_ptr<SelectTable> TablePtr;
 typedef std::shared_ptr<Table> BaseTablePtr;
 
