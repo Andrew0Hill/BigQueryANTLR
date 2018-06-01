@@ -11,7 +11,7 @@
 #define MAP_INSERT_ALL(target, source) target.insert(source.begin(), source.end());
 // Check if a key value (kval) exists in a map. If not, create a std::vector<ttype> and add tval as an element. 
 #define INSERT_OR_MAKE_VEC(target, kval, ttype, tval)    \
-               if(target.find(kval) != target.end()) {   \
+               if(target.find(kval) == target.end()) {   \
                     target[kval] = std::vector<ttype>(); \
                }                                         \
                target[kval].push_back(tval);

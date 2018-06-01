@@ -6,7 +6,7 @@
 #include "SortedColumns.h"
 #include <memory>
 #include <stack>
-//#define DEBUG
+#define DEBUG
 typedef std::shared_ptr<SelectTable> TablePtr;
 typedef std::shared_ptr<Table> BaseTablePtr;
 
@@ -194,12 +194,44 @@ public:
 							std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
 						}
 					}
+
+					// Iterate each column in the reference list.
+					for(Column &c : current_table->column_ref_list){
+						// Resolve the column name.
+						std::vector<Column> columns = t_ptr->column_lookup[c.real_name];
+						// Column object to hold the matched column if it exists. 
+						Column found_col;
+						// Boolean value so we can check if a match was found or not.
+						bool match_found = false;
+						// Iterate through all columns that have this real_name.
+						for(Column &t_col : columns){
+							std::cout << t_col.alias << std::endl;
+							if(t_col.alias == c.real_name){
+								found_col = t_col;
+								match_found = true;
+								break;
+							}
+						}
+						// If a match was found, update the table name and real name for the column.
+						if(match_found){
+							c.real_name = found_col.real_name;
+							c.table_name = found_col.table_name;
+						}else{
+							std::cout << "Error: Could not complete lookup for reference column '" << c.real_name << "'.\n";
+						}
+					}
 				}
 				else{
 
 					for(Column &c : current_table->column_list){
 						#ifdef DEBUG
-							std::cout << "Updating tables name to: '" << table->table_name << "' from: '"   << c.table_name << "'." << std::endl;
+							std::cout << "Updating column table name to: '" << table->table_name << "' from: '"   << c.table_name << "'." << std::endl;
+						#endif
+						c.table_name = table->table_name;
+					}
+					for(Column &c : current_table->column_ref_list){
+						#ifdef DEBUG
+							std::cout << "Updating reference column table name to: '" << table->table_name << "' from: '"   << c.table_name << "'." << std::endl;
 						#endif
 						c.table_name = table->table_name;
 					}
@@ -250,12 +282,123 @@ public:
 
 			}
 
+			for(Column &c : current_table->column_ref_list){
+				#ifdef DEBUG
+					std::cout << "Current column name: " << c.real_name << std::endl;
+				#endif
+				// Get the vector of columns that are associated with this column's real name in the SELECT list. 
+				std::vector<Column> columns = table->column_lookup[c.real_name];
+				// Column object to hold the matched column if it exists. 
+				Column found_col;
+				// Boolean value so we can check if a match was found or not.
+				bool match_found = false;
+				// Iterate through all columns that have this real_name.
+				for(Column &t_col : columns){
+					#ifdef DEBUG
+						std::cout << "Candidate column: "  << t_col.real_name << std::endl;
+					#endif
+					if(t_col.alias == c.real_name){
+						#ifdef DEBUG
+							std::cout << "Match found." << std::endl;
+						#endif
+						found_col = t_col;
+						match_found = true;
+						break;
+					}
+				}
+				// If a match was found, update the table name and real name for the column.
+				if(match_found){
+					c.real_name = found_col.real_name;
+					c.table_name = found_col.table_name;
+				}else{
+					std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
+				}
+
+			}
 
 		}
 		// If there are 1 or more tables in either the "normal" or "subquery" lookup tables, then we cannot assume that every column comes from the same table.
 		// In this case we must rely on the table name from each <table_name>.<column_name> expression in order to resolve table names.
 		else{
+			// Iterate each column in the column list.
 			for(Column &c : current_table->column_list){
+				// Check the global CTE table for this table name.
+				if(global_cte_table != nullptr && global_cte_table->sq_lookup_table.find(c.table_name) != current_table->sq_lookup_table.end()){
+					std::cout << "Found a CTE with matching table name." << std::endl;
+					// Get a reference to the matching table.
+					auto t_ptr = global_cte_table->sq_lookup_table[c.table_name];
+
+					#ifdef DEBUG
+						for(auto &it : t_ptr->column_lookup){
+							std::cout << it.first << std::endl;
+							for(auto &col : it.second){
+								std::cout << col << std::endl;
+							}
+						}
+					#endif
+
+					// Resolve the column name.
+					std::vector<Column> columns = t_ptr->column_lookup[c.real_name];
+					// Column object to hold the matched column if it exists. 
+					Column found_col;
+					// Boolean value so we can check if a match was found or not.
+					bool match_found = false;
+					// Iterate through all columns that have this real_name.
+					for(Column &t_col : columns){
+						std::cout << t_col.alias << std::endl;
+						if(t_col.alias == c.real_name){
+							found_col = t_col;
+							match_found = true;
+							break;
+						}
+					}
+					// If a match was found, update the table name and real name for the column.
+					if(match_found){
+						c.real_name = found_col.real_name;
+						c.table_name = found_col.table_name;
+					}else{
+						std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
+					}
+				}
+				// Check if this column comes from a normal table.
+				else if(current_table->lookup_table.find(c.table_name) != current_table->lookup_table.end()){
+					// Get a reference to the Table that matches with the table name of this column.
+					auto table = current_table->lookup_table[c.table_name];
+					// For a non-subquery table all we need to do is update the column's table name to be that of the table it matched with.
+					c.table_name = table->table_name;
+				}
+				// Check if this column comes from a subquery table.
+				else if (current_table->sq_lookup_table.find(c.table_name) != current_table->sq_lookup_table.end()){
+					auto table = current_table->sq_lookup_table[c.table_name];
+					// Get the vector of columns that are associated with this column's real name in the SELECT list. 
+					std::vector<Column> columns = table->column_lookup[c.real_name];
+					// Column object to hold the matched column if it exists. 
+					Column found_col;
+					// Boolean value so we can check if a match was found or not.
+					bool match_found = false;
+					// Iterate through all columns that have this real_name.
+					for(Column &t_col : columns){
+						if(t_col.alias == c.real_name){
+							found_col = t_col;
+							match_found = true;
+							break;
+						}
+					}
+					// If a match was found, update the table name and real name for the column.
+					if(match_found){
+						c.real_name = found_col.real_name;
+						c.table_name = found_col.table_name;
+					}else{
+						std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
+					}
+				}
+				// Error out otherwise.
+				else{
+					std::cout << "Error: Table '" << c.table_name << "' could not be found in lookup tables." << std::endl;
+				}
+			}
+			// Iterate each column in the reference column list.
+			for(Column &c : current_table->column_ref_list){
 				// Check the global CTE table for this table name.
 				if(global_cte_table != nullptr && global_cte_table->sq_lookup_table.find(c.table_name) != current_table->sq_lookup_table.end()){
 					std::cout << "Found a CTE with matching table name." << std::endl;
@@ -338,11 +481,20 @@ public:
 		}
 
 		// Iterate each column in the column reference list, and resolve them to real column names if possible.
-		for(Column &c : current_table->column_ref_list){
+		/*for(Column &c : current_table->column_ref_list){
 			// Check if we have an entry for this column in the column_lookup table.
 			if(current_table->column_lookup.find(c.real_name) != current_table->column_lookup.end()){
+				#ifdef DEBUG
+					for(auto &clm : current_table->column_lookup[c.real_name]){
+						std::cout << clm << std::endl;
+					}
+				#endif
 				if(current_table->column_lookup[c.real_name].size() == 1){
 					Column temp = current_table->column_lookup[c.real_name][0];
+
+					#ifdef DEBUG
+						std::cout << "Only one table matches lookup for: " << c.real_name << std::endl;
+					#endif
 					c.real_name = temp.real_name;
 					c.table_name = temp.table_name;
 				}
@@ -350,6 +502,9 @@ public:
 					// If so, iterate through the entries that match this alias and try to find one where the aliased table name
 					// matches the name 
 					for(Column &cand_col : current_table->column_lookup[c.real_name]){
+						#ifdef DEBUG
+							std::cout << "Current table alias name: " << cand_col.table_alias_name << " table name: " << c.table_name << std::endl;
+						#endif
 						if(cand_col.table_alias_name == c.table_name){
 							c.real_name = cand_col.real_name;
 							c.table_name = cand_col.table_name;
@@ -357,7 +512,7 @@ public:
 					}
 				}
 			}
-		}
+		}*/
 
 
 
