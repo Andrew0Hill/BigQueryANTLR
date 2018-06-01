@@ -7,7 +7,7 @@
 #include <memory>
 #include <stack>
 // Uncomment this line to get debug print statements when running in Python.
-//#define DEBUG
+#define DEBUG
 typedef std::shared_ptr<SelectTable> TablePtr;
 typedef std::shared_ptr<Table> BaseTablePtr;
 
@@ -194,8 +194,8 @@ public:
 						}else{
 							std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
 						}
+						INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 					}
-
 					// Iterate each column in the reference list.
 					for(Column &c : current_table->column_ref_list){
 						// Resolve the column name.
@@ -229,6 +229,7 @@ public:
 							std::cout << "Updating column table name to: '" << table->table_name << "' from: '"   << c.table_name << "'." << std::endl;
 						#endif
 						c.table_name = table->table_name;
+						INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 					}
 					for(Column &c : current_table->column_ref_list){
 						#ifdef DEBUG
@@ -280,7 +281,7 @@ public:
 				}else{
 					std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
 				}
-
+				INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 			}
 
 			for(Column &c : current_table->column_ref_list){
@@ -397,6 +398,7 @@ public:
 				else{
 					std::cout << "Error: Table '" << c.table_name << "' could not be found in lookup tables." << std::endl;
 				}
+				INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 			}
 			// Iterate each column in the reference column list.
 			for(Column &c : current_table->column_ref_list){
@@ -469,6 +471,35 @@ public:
 					}else{
 						std::cout << "Error: Could not complete lookup for column '" << c.real_name << "'.\n";
 					}
+				}	
+				else if(current_table->column_lookup.find(c.real_name) != current_table->column_lookup.end()){
+					#ifdef DEBUG
+						for(auto &clm : current_table->column_lookup[c.real_name]){
+							std::cout << clm << std::endl;
+						}
+					#endif
+					if(current_table->column_lookup[c.real_name].size() == 1){
+						Column temp = current_table->column_lookup[c.real_name][0];
+
+						#ifdef DEBUG
+							std::cout << "Only one table matches lookup for: " << c.real_name << std::endl;
+						#endif
+						c.real_name = temp.real_name;
+						c.table_name = temp.table_name;
+					}
+					else{
+						// If so, iterate through the entries that match this alias and try to find one where the aliased table name
+						// matches the name 
+						for(Column &cand_col : current_table->column_lookup[c.real_name]){
+							#ifdef DEBUG
+								std::cout << "Current table alias name: " << cand_col.table_alias_name << " table name: " << c.table_name << std::endl;
+							#endif
+							if(cand_col.table_alias_name == c.table_name){
+								c.real_name = cand_col.real_name;
+								c.table_name = cand_col.table_name;
+							}
+						}
+					}
 				}
 				// Error out otherwise.
 				else{
@@ -477,9 +508,9 @@ public:
 			}
 		}
 		// Iterate each column in the column list. Add the values to the lookup table at this level.
-		for(Column &c : current_table->column_list){
+		/*for(Column &c : current_table->column_list){
 			INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
-		}
+		}*/
 
 		#ifdef DEBUG
 			std::cout << "Exit: exitSelect_statement()" << std::endl;
