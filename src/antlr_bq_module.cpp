@@ -105,29 +105,8 @@ static PyObject* parse(PyObject* self, PyObject* args) {
 	return return_dict;
 }
 
-
-static PyObject* set_column_callback(PyObject* self, PyObject* args) {
-	PyObject* callback;
-	PyObject* result = NULL;
-	if (PyArg_ParseTuple(args, "O:set_column_callback", &callback)) {
-		if (!PyCallable_Check(callback)) {
-			PyErr_SetString(PyExc_TypeError, "argument to set_column_callback must be callable");
-			return NULL;
-		}
-		Py_XINCREF(callback);
-		Py_XDECREF(callbacks[0]);
-		callbacks[0] = callback;
-
-		Py_IncRef(Py_None);
-		result = Py_None;
-	}
-	return result;
-}
-
-
 static PyMethodDef antlr_bq_methods[]{
 	{ "parse", (PyCFunction)parse, METH_VARARGS, "Parses a string." },
-	{ "set_column_callback", (PyCFunction)set_column_callback, METH_VARARGS, "Sets the callback for column ids" },
 	{ NULL, NULL, 0, NULL }
 };
 
