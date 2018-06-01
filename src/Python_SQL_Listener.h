@@ -232,10 +232,30 @@ public:
 						INSERT_OR_MAKE_VEC(current_table->column_lookup, c.alias, Column, c)
 					}
 					for(Column &c : current_table->column_ref_list){
-						#ifdef DEBUG
-							std::cout << "Updating reference column table name to: '" << table->table_name << "' from: '"   << c.table_name << "'." << std::endl;
-						#endif
-						c.table_name = table->table_name;
+							if(current_table->column_lookup.find(c.alias) != current_table->column_lookup.end()){
+							// Resolve the column name.
+							std::vector<Column> columns = current_table->column_lookup[c.real_name];
+							// Column object to hold the matched column if it exists. 
+							Column found_col;
+							// Boolean value so we can check if a match was found or not.
+							bool match_found = false;
+							// Iterate through all columns that have this real_name.
+							for(Column &t_col : columns){
+								std::cout << t_col.alias << std::endl;
+								if(t_col.alias == c.real_name){
+									found_col = t_col;
+									match_found = true;
+									break;
+								}
+							}
+							// If a match was found, update the table name and real name for the column.
+							if(match_found){
+								c.real_name = found_col.real_name;
+								c.table_name = found_col.table_name;
+							}else{
+								std::cout << "Error: Could not complete lookup for reference column '" << c.real_name << "'.\n";
+							}
+						}
 					}
 				}
 		}
